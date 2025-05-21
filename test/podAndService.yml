@@ -1,0 +1,53 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: helm-upgrade-pod
+  labels:
+    app: helm-upgrade
+spec:
+  containers:
+  - name: helm-upgrade-container
+    image: helm-upgrade:v1       
+    imagePullPolicy: IfNotPresent  # pulls only if not present locally
+    ports:
+    - containerPort: 8080         # container listens on 8080
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: helm-upgrade-svc
+spec:
+  type: ClusterIP
+  selector:
+    app: helm-upgrade
+  ports:
+  - port: 8080                  # service port
+    targetPort: 8080            # maps to containerPort
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: helm-upgrade-role
+  namespace: default
+rules:
+  - apiGroups: ["*"]
+    resources: ["*", "pods", "deployments", "services", "configmaps", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: helm-upgrade-rolebinding
+  namespace: default
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: default
+roleRef:
+  kind: Role
+  name: helm-upgrade-role
+  apiGroup: rbac.authorization.k8s.io
+
