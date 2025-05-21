@@ -8,7 +8,7 @@ metadata:
 spec:
   containers:
   - name: helm-upgrade-container
-    image: helm-upgrade:v1       
+    image: helm-upgrade:latest  # replace with your image       
     imagePullPolicy: IfNotPresent  # pulls only if not present locally
     ports:
     - containerPort: 8080         # container listens on 8080

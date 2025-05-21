@@ -1,9 +1,11 @@
 # helm-autoUpgrade
 
-This repository provides a containerized tool to programmatically upgrade a Helm release using the Helm Go SDK. It supports custom `values.yaml` files and is suitable for automation in CI/CD pipelines.
+![Kubernetes Helm Upgrade Flow](test/flow.png)
+
+This repository provides a containerized tool to programmatically upgrade or install a Helm release using the Helm Go SDK. It supports custom `values.yaml` files and is suitable for automation in CI/CD pipelines.
 
 ## Features
-- Upgrade any Helm release with a specified chart and values file
+- Upgrade or install any Helm release with a specified chart and values file (via URL)
 - Uses the official Helm Go SDK (no shelling out)
 - Ready-to-use Docker image
 - GitHub Actions workflow for CI and ECR push
@@ -12,19 +14,20 @@ This repository provides a containerized tool to programmatically upgrade a Helm
 ## Usage
 
 ### Prerequisites
-- Kubernetes cluster access (with permissions to upgrade releases)
+- Kubernetes cluster access (with permissions to upgrade/install releases)
 - Helm 3 compatible chart
 - Docker, AWS CLI (for ECR), and kubectl (for deployment)
 
 ### Build Locally
 ```sh
-git clone <repo-url>
-cd helm-autoUpgrade
-go mod tidy
-go build -o helm-upgrade main.go
+# Clone and build
+ git clone <repo-url>
+ cd helm-autoUpgrade
+ go mod tidy
+ go build -o helm-upgrade main.go
 ```
 
-### Run Locally
+### Run Locally (Legacy CLI)
 ```sh
 ./helm-upgrade <release-name> <chart-path> <values.yaml>
 ```
@@ -35,43 +38,52 @@ docker build -t <your-ecr-repo>:<tag> .
 docker push <your-ecr-repo>:<tag>
 ```
 
-### GitHub Actions CI
-- The workflow in `.github/workflows/ci.yml` builds and pushes the image to ECR on every push to `main`.
-- Set up AWS credentials and ECR repository as required.
+### Deploy in Kubernetes
 
-### Kubernetes RBAC
-- Apply `k8s-role.yaml` to grant the pod permissions to perform Helm upgrades:
-```sh
-kubectl apply -f k8s-role.yaml
-```
+1. **Deploy the Service, Pod, and RBAC**
+   - Apply the `test/podAndService.yml` manifest to your Kubernetes cluster:
+   ```sh
+   kubectl apply -f test/podAndService.yml
+   ```
+   This command will install the Service, Pod, Role, and RoleBinding, attaching the necessary permissions to the default service account.
 
-### Deploy as a Pod (example)
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: helm-upgrade
-spec:
-  serviceAccountName: default
-  containers:
-    - name: helm-upgrade
-      image: <your-ecr-repo>:<tag>
-      args: ["<release-name>", "<chart-path>", "<values.yaml>"]
-      volumeMounts:
-        - name: chart-volume
-          mountPath: /charts
-        - name: values-volume
-          mountPath: /values
-  volumes:
-    - name: chart-volume
-      configMap:
-        name: your-chart-cm
-    - name: values-volume
-      configMap:
-        name: your-values-cm
-```
+2. **Trigger a Helm Upgrade/Install via API**
+   - Once the service and pod are running, you can exec into any pod in the cluster and run the following curl command:
+   ```sh
+   curl -X POST http://helm-upgrade-svc:8080/upgrade \
+     -H "Content-Type: application/json" \
+     -d '{
+       "releaseName": "nginx-remote",
+       "chartURL": "https://charts.bitnami.com/bitnami/nginx-13.2.2.tgz",
+       "valuesURL": "https://raw.githubusercontent.com/MayankGandhe/helm-autoUpgrade/refs/heads/main/test/new-value.yaml"
+     }'
+   ```
+   - This will trigger a Helm upgrade (or install if the release does not exist). The release will be named `nginx-remote` and will use the provided chart and values file.
+   - The values file can override settings such as the pod name using `nameOverride` or similar Helm values.
 
-## Notes
-- The tool uses the Helm Go SDK for all operations.
-- Ensure the pod has access to the Kubernetes API and the necessary RBAC permissions.
-- Customize the deployment and RBAC as needed for your environment.
+3. **Integration with Application Pod**
+   - In a real deployment, your application pod can call this API service directly. The API will immediately acknowledge the request, allowing your application to proceed with its workflow while the upgrade/install runs in the background.
+
+---
+
+In the above example we are updating the name of the pod but we can apply any changes to the helm chart using the values.yml file , or we can update the chart version 
+
+![Before Making the CURL call  of Code](test/before.png)
+
+![After Making Curl call the Application name is changed](test/after.png)
+
+
+
+**Notes:**
+- The API expects URLs for both the Helm chart (`chartURL`) and the values file (`valuesURL`).
+- The service will handle upgrades of both Chart and Values
+- Ensure the pod running this service has the necessary RBAC permissions (see `test/podAndService.yml`).
+- You can customize the deployment and RBAC as needed for your environment.
+
+
+**Future Enhancements**
+- Mechanism to Add authentication to pull image from private helm charts.
+- Should have an API call to get the current version of helm chart and image from current release.
+- Create a helm char for the application that can be used in a Parent chart which will deploy the Application helm chart and this helm upgrade chart .
+- Add a cronjob mechanism in the chart that can trigger itself at given frequecy and check for latest release if it's there it can trigger the update.
+
