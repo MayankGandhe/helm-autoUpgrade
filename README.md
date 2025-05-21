@@ -27,11 +27,6 @@ This repository provides a containerized tool to programmatically upgrade or ins
  go build -o helm-upgrade main.go
 ```
 
-### Run Locally (Legacy CLI)
-```sh
-./helm-upgrade <release-name> <chart-path> <values.yaml>
-```
-
 ### Build and Push Docker Image
 ```sh
 docker build -t <your-ecr-repo>:<tag> .
