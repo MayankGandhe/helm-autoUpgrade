@@ -3,8 +3,10 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 
 	"helm.sh/helm/v3/pkg/action"
 	"helm.sh/helm/v3/pkg/cli"
@@ -44,10 +46,30 @@ func upgradeHelmChart(releaseName, chartPath, valuesFile string) error {
 }
 
 // Struct for upgrade request
+// Accept chartURL and valuesURL instead of file paths
 type UpgradeRequest struct {
 	ReleaseName string `json:"releaseName"`
-	ChartPath   string `json:"chartPath"`
-	ValuesFile  string `json:"valuesFile"`
+	ChartURL    string `json:"chartURL"`
+	ValuesURL   string `json:"valuesURL"`
+}
+
+// Helper to download a file from URL to a temp file
+func downloadToTemp(url, prefix string) (string, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	f, err := os.CreateTemp("", prefix+"-*")
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return f.Name(), nil
 }
 
 func upgradeHandler(w http.ResponseWriter, r *http.Request) {
@@ -65,9 +87,21 @@ func upgradeHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusAccepted)
 	w.Write([]byte(`{"status":"acknowledged"}`))
-	// Run upgrade in background
+	// Download chart and values file in background, then upgrade
 	go func() {
-		err := upgradeHelmChart(req.ReleaseName, req.ChartPath, req.ValuesFile)
+		chartPath, err := downloadToTemp(req.ChartURL, "chart")
+		if err != nil {
+			fmt.Printf("Failed to download chart: %v\n", err)
+			return
+		}
+		defer os.Remove(chartPath)
+		valuesPath, err := downloadToTemp(req.ValuesURL, "values")
+		if err != nil {
+			fmt.Printf("Failed to download values: %v\n", err)
+			return
+		}
+		defer os.Remove(valuesPath)
+		err = upgradeHelmChart(req.ReleaseName, chartPath, valuesPath)
 		if err != nil {
 			fmt.Printf("Helm upgrade failed: %v\n", err)
 		} else {
