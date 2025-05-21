@@ -25,7 +25,6 @@ func upgradeHelmChart(releaseName, chartPath, valuesFile string) error {
 		return fmt.Errorf("failed to init helm action config: %w", err)
 	}
 
-	upgrade := action.NewUpgrade(actionConfig)
 	chart, err := loader.Load(chartPath)
 	if err != nil {
 		return fmt.Errorf("failed to load chart: %w", err)
@@ -37,11 +36,29 @@ func upgradeHelmChart(releaseName, chartPath, valuesFile string) error {
 		return fmt.Errorf("failed to merge values: %w", err)
 	}
 
+	upgrade := action.NewUpgrade(actionConfig)
 	_, err = upgrade.Run(releaseName, chart, vals)
-	if err != nil {
+	if err == nil {
+		return nil // upgrade successful
+	}
+	if err.Error() != "release: not found" && !isReleaseNotFound(err) {
 		return fmt.Errorf("helm upgrade failed: %w", err)
 	}
+	// If release not found, do install
+	install := action.NewInstall(actionConfig)
+	install.ReleaseName = releaseName
+	install.Namespace = settings.Namespace()
+	_, err = install.Run(chart, vals)
+	if err != nil {
+		return fmt.Errorf("helm install failed: %w", err)
+	}
 	return nil
+}
+
+// Helper to check for not found error
+func isReleaseNotFound(err error) bool {
+	return err != nil && (err.Error() == "release: not found" ||
+		len(err.Error()) >= 18 && err.Error()[:18] == "release: not found")
 }
 
 // Struct for upgrade request
