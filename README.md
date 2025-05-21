@@ -2,10 +2,10 @@
 
 ![Kubernetes Helm Upgrade Flow](test/flow.png)
 
-This repository provides a containerized tool to programmatically upgrade or install a Helm release using the Helm Go SDK. It supports custom `values.yaml` files and is suitable for automation in CI/CD pipelines.
+This repository provides a containerized tool to programmatically upgrade a Helm release using the Helm Go SDK. It supports custom `values.yaml` files and is suitable for automation in CI/CD pipelines.
 
 ## Features
-- Upgrade or install any Helm release with a specified chart and values file (via URL)
+- Upgrade any Helm release with a specified chart and values file (via URL)
 - Uses the official Helm Go SDK (no shelling out)
 - Ready-to-use Docker image
 - GitHub Actions workflow for CI and ECR push
@@ -14,7 +14,7 @@ This repository provides a containerized tool to programmatically upgrade or ins
 ## Usage
 
 ### Prerequisites
-- Kubernetes cluster access (with permissions to upgrade/install releases)
+- Kubernetes cluster access (with permissions to upgrade releases)
 - Helm 3 compatible chart
 - Docker, AWS CLI (for ECR), and kubectl (for deployment)
 
@@ -42,7 +42,7 @@ docker push <your-ecr-repo>:<tag>
    ```
    This command will install the Service, Pod, Role, and RoleBinding, attaching the necessary permissions to the default service account.
 
-2. **Trigger a Helm Upgrade/Install via API**
+2. **Trigger a Helm Upgrade via API**
    - Once the service and pod are running, you can exec into any pod in the cluster and run the following curl command:
    ```sh
    curl -X POST http://helm-upgrade-svc:8080/upgrade \
@@ -53,11 +53,11 @@ docker push <your-ecr-repo>:<tag>
        "valuesURL": "https://raw.githubusercontent.com/MayankGandhe/helm-autoUpgrade/refs/heads/main/test/new-value.yaml"
      }'
    ```
-   - This will trigger a Helm upgrade (or install if the release does not exist). The release will be named `nginx-remote` and will use the provided chart and values file.
+   - This will trigger a Helm upgrade . The release will be named `nginx-remote` and will use the provided chart and values file.
    - The values file can override settings such as the pod name using `nameOverride` or similar Helm values.
 
 3. **Integration with Application Pod**
-   - In a real deployment, your application pod can call this API service directly. The API will immediately acknowledge the request, allowing your application to proceed with its workflow while the upgrade/install runs in the background.
+   - In a real deployment, your application pod can call this API service directly. The API will immediately acknowledge the request, allowing your application to proceed with its workflow while the upgrade runs in the background.
 
 ---
 
