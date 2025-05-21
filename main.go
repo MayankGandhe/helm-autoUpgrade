@@ -1,8 +1,9 @@
 package main
 
 import (
-	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 
 	"helm.sh/helm/v3/pkg/action"
@@ -40,19 +41,41 @@ func upgradeHelmChart(releaseName, chartPath, valuesFile string) error {
 	return nil
 }
 
-func main() {
-	if len(os.Args) < 4 {
-		fmt.Println("Usage: ./helm-upgrade <release-name> <chart-path> <values.yaml>")
-		os.Exit(1)
-	}
-	releaseName := os.Args[1]
-	chartPath := os.Args[2]
-	valuesFile := os.Args[3]
+// Struct for upgrade request
+type UpgradeRequest struct {
+	ReleaseName string `json:"releaseName"`
+	ChartPath   string `json:"chartPath"`
+	ValuesFile  string `json:"valuesFile"`
+}
 
-	err := upgradeHelmChart(releaseName, chartPath, valuesFile)
-	if err != nil {
-		fmt.Printf("Helm upgrade failed: %v\n", err)
-		os.Exit(1)
+func upgradeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		w.Write([]byte("Method not allowed"))
+		return
 	}
-	fmt.Println("Helm upgrade successful!")
+	var req UpgradeRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("Invalid request body"))
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write([]byte(`{"status":"acknowledged"}`))
+	// Run upgrade in background
+	go func() {
+		err := upgradeHelmChart(req.ReleaseName, req.ChartPath, req.ValuesFile)
+		if err != nil {
+			fmt.Printf("Helm upgrade failed: %v\n", err)
+		} else {
+			fmt.Println("Helm upgrade successful!")
+		}
+	}()
+}
+
+func main() {
+	http.HandleFunc("/upgrade", upgradeHandler)
+	fmt.Println("Server started on :8080")
+	http.ListenAndServe(":8080", nil)
 }
