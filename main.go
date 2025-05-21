@@ -10,7 +10,7 @@ import (
 	"helm.sh/helm/v3/pkg/cli"
 	"helm.sh/helm/v3/pkg/cli/values"
 	"helm.sh/helm/v3/pkg/chart/loader"
-	"helm.sh/helm/v3/pkg/release"
+	"helm.sh/helm/v3/pkg/getter"
 )
 
 var settings = cli.New()
@@ -18,7 +18,9 @@ var settings = cli.New()
 // upgradeHelmChart upgrades a Helm release with a given chart and values file
 func upgradeHelmChart(releaseName, chartPath, valuesFile string) error {
 	actionConfig := new(action.Configuration)
-	if err := actionConfig.Init(settings.RESTClientGetter(), settings.Namespace(), os.Getenv("HELM_DRIVER"), fmt.Printf); err != nil {
+	if err := actionConfig.Init(settings.RESTClientGetter(), settings.Namespace(), os.Getenv("HELM_DRIVER"), func(format string, v ...interface{}) {
+		fmt.Printf(format, v...)
+	}); err != nil {
 		return fmt.Errorf("failed to init helm action config: %w", err)
 	}
 
@@ -29,7 +31,7 @@ func upgradeHelmChart(releaseName, chartPath, valuesFile string) error {
 	}
 
 	p := values.Options{ValueFiles: []string{valuesFile}}
-	vals, err := p.MergeValues(settings)
+	vals, err := p.MergeValues(getter.All(settings))
 	if err != nil {
 		return fmt.Errorf("failed to merge values: %w", err)
 	}
